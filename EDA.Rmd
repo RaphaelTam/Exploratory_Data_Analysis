@@ -1,0 +1,335 @@
+---
+title: "Do Economic Factors Affect Stock Prices"
+author: "Raphael Tam"
+date: "December 29, 2014"
+output: html_document
+---
+# Analysis
+
+```{r packages}
+library(reshape2)
+library(gridExtra)
+library(memisc)
+library(ggplot2)
+library(ggthemes)
+library(scales)
+library(zoo)
+library(GGally)
+```
+###  Load data from my file.  
+```{r load_the_data}
+#Please refer to "get_data.Rmd" on how I obtained the dataset
+df<-read.csv("my_data.csv", header=TRUE)
+head(df,3)
+tail(df,3)
+```
+### Summary of data
+```{r summary_of_data}
+str(df)
+#The data is obtained from Quandl.com. It contains quarterly US macro-economic data from Q1 1969 to Q3 2014 and.  The sp_500 is a weighted index of the stock prices of the largest 500 companies in the US.  As an index, it has no unit.  Gross domestic product (gdp) is in billion dollars.  gdp_growth_rate' and 'sp_500_qq_change' are quarterly change rates.  'cum_inflation' is also an index.  The values in the gdp column can be divided by cum_inflation to get GDP in constant dollars.  'housing_start' is the number in thousands of permits granted nationally for that quarter. The unemployment rate (unempl_rate) is the % of work force that is unemployed and actively seeks jobs. 'president','senate' and 'house' are categorical variables.  The value is 1 when Democrats control one of these 3 branches, 0 otherwise.
+```
+## Now start learning the range and distribution of single variables
+```{r single_variable}
+#Plot S&P500 over time
+theme_set(theme_minimal(24))
+ggplot(data=df,aes(x=as.Date(Date), y=sp_500))+geom_line(color="red")
+#plot sp500_qq_change histogram to get a feel for the quarter on quarter changes
+summary(df$sp500_qq_change)
+ggplot(df, aes(x=sp500_qq_change))+geom_histogram(binwidth=.01, color="black",
+                                                  fill="white")                                     
+#summary of gdp growth rate
+summary(df$gdp_growth_rate)
+#GDP growth rate histogram
+ggplot(df, aes(x=gdp_growth_rate))+ geom_histogram(binwidth=.0025,color='black',
+                                                   fill='white')
+#Unemployment rate 
+summary(df$unempl_rate)
+ggplot(df, aes(x=unempl_rate)) + geom_histogram(binwidth = .25, color="black", 
+                                                fill='white')
+#Housing starts 
+summary(df$housing_start)
+ggplot(df, aes(x=housing_start)) + geom_histogram(binwidth = 100, color ='black', 
+                                                  fill='white')
+
+# inflation rate
+ggplot(data=df, aes(x=as.Date(Date), y=cum_inflation))+geom_line()
+
+#Get quarter on quarter change in inflation. 'getrate' was used in 'get_data.Rmd' to calculate the quarterly change rates for the sp_500 and gdp.  Reuse it here to get the quarterly change in inflation rate.
+getrate <- function (ts){
+  ts1<-c(ts,0)
+  ts2<-c(0,ts)
+  ts1<-ts1[2:(length(ts1)-1)]
+  ts2<-ts2[2:(length(ts2)-1)]
+  (ts2-ts1)/ts1
+  }
+
+q_inf_rate<-getrate(df$cum_inflation)
+#set the last data point to 0 since it is the baseline
+q_inf_rate[nrow(df)]=0
+summary(q_inf_rate)
+#Bind quarterly inflation rate to the data frame
+df<-cbind(df, q_inf_rate)
+#Plot the histogram to get a feel for its distribution.
+ggplot(df, aes(x=q_inf_rate))+geom_histogram(binwidth=.001, color='black',
+                                             fill='white')
+#Visualize the quarterly change in inflation rate in time. There are periods of deflation (negatvie inflation) but they are rare.  The one seen in 2009 was caused by the bank crisis.
+ggplot(df, aes(x=as.Date(Date),y=q_inf_rate))+geom_line()
+#Take a look at which party controls the 3 branches of government
+#Now visualize Democratic control over time
+p1<-ggplot(data=df,aes(y=house,x=as.Date(Date)))+geom_step()+
+  labs(title="Democratic control in House")
+
+p2<-ggplot(data=df,aes(y=senate,x=as.Date(Date)))+geom_step()+
+  labs(title="Democratic control in Senate")
+p3<-ggplot(df)+geom_step(aes(y=df$president,x=as.Date(df$Date)))+
+  labs(title="Democrat in the WH")
+grid.arrange(p1,p2,p3, ncol=1)
+#Do the same with Republicans control
+p1<-ggplot(df)+geom_step(aes(y=((df$house+1)%%2),x=as.Date(df$Date)))+
+  labs(title="Republican control in House")
+p2<-ggplot(df)+geom_step(aes(y=((df$senate+1)%%2),x=as.Date(df$Date)))+
+  labs(title="Republican control in Senate")
+p3<-ggplot(df)+geom_step(aes(y=((df$president+1)%%2),x=as.Date(df$Date)))+
+  labs(title="Republican in the WH")
+grid.arrange(p1,p2,p3, ncol=1)
+
+#So Democrats control the House and Senate more often than the Republicans, but less so for the White House 
+table (df$house)
+table (df$senate)
+table (df$president)
+```
+## Explore relationships between 2 variables 
+```{r two_variables}
+#Normalize the values to get a unified and compressed scale.
+df[c('n_sp_500','n_sp500_qq_change','n_gdp','n_gdp_growth_rate','n_housing_start', 'n_unempl_rate','n_q_inf_rate')] = 
+  scale(df[c('sp_500','sp500_qq_change','gdp','gdp_growth_rate','housing_start','unempl_rate','q_inf_rate')],center=T,scale=T)
+#Visualize sp500 quarter on quarter change with quarterly gdp rate.  How well can changes in economic variables "explain" the quarterly changes in the S&P 500? 
+#Melt data into long frame
+
+df_long = melt(subset(df, select =c(Date,n_sp500_qq_change, n_gdp_growth_rate)),
+               id.vars="Date",
+               variable.name="rates",value.name="rate_values")
+#Check for temporal relationship between the two rates
+ggplot(data=df_long, aes(x=as.Date(Date),y=rate_values,color= rates)) +
+  geom_line(aes(group=rates))
+#Don't see any pattern
+#How about other economic variables?
+
+ggplot(data=df, aes(x=gdp_growth_rate,y=q_inf_rate)) +
+  geom_point()
+cor.test(df$gdp_growth_rate, df$q_inf_rate)
+#No discernable relationship between the gdp growth and inflation rates
+#How about the relationship between governing party and the stock index?
+
+by(df$sp500_qq_change, df$president, summary)
+ggplot(df, aes(x=as.factor(df$president), y=df$sp500_qq_change), 
+       fill=df$president)+geom_boxplot()
+#The SP500 seems to do better and fewer negative outliers with Democratic Presidents 
+#Do the same with House and Senate control.
+#The picture is reversed with Democratic control of House and Senate.  So it is difficult to draw any inference on the effect of the governing party on quarterly changes in the sp500. 
+ggplot(df, aes(x=as.factor(df$house), y=df$sp500_qq_change), 
+       fill=as.factor(df$house))+geom_boxplot()
+ggplot(df, aes(x=as.factor(df$senate), y=df$sp500_qq_change), 
+       fill=df$senate)+geom_boxplot()
+#Let me visualize how the sp500 varies with the president's party over time
+ggplot(data=df, aes(x=as.Date(Date),y=gdp_growth_rate)) + 
+  geom_line(aes(color=president))+
+ geom_hline(aes(yintercept=mean(gdp_growth_rate)))
+#Seems to go into deadends with the governing philosophy as a variable
+
+#Since the stock market may anticpate economic growth, I will check the sp500 quarter on quarter change against gdp_growth and check the pearson correlation with the current as well as 1 and 2 quarters back.
+sp5_var_cor<-function(df, ts, nq){
+  for (i in 1:nq){
+    j=i-1
+    rate_advanced<-ts[(j+1):(j+nrow(df))]
+    df = cbind(df,rate_advanced)
+    print (cor.test(df$sp500_qq_change,rate_advanced))
+  }
+}
+sp5_var_cor(df,df$gdp_growth_rate,3)
+
+#Don't see a pattern between the rates
+#Now check the correlation between s&p quarterly changes against the quarterly inflation rate, housing start and unemployment rate.  Also plot sp_500 change against these vairables.  
+#It doesn't seem to have a pattern with q_inf_rate.
+sp5_var_cor(df, df$q_inf_rate, 3)
+ggplot(data=df, aes(x=q_inf_rate, y=sp500_qq_change))+geom_point()
+
+#No pattern with quarterly inflation rate. How about housing start?
+sp5_var_cor(df, df$housing_start, 3)
+ggplot(data=df, aes(x=housing_start, y=sp500_qq_change))+geom_point()
+#How about umemployment rate
+sp5_var_cor(df, df$unempl_rate, 3)
+ggplot(data=df, aes(x=unempl_rate, y=sp500_qq_change))+geom_point()
+#These economic factors show little correlation with sp_500 quarterly changes for the current quarter or up to 2 quarters back
+#The time lag theory doesn't seem to produce clues on how the S&P quaterly changes are related to economic variables.  
+#I wonder what the scatter plots between the sp500 index itself (not the quarterly change) and the other variables look like.
+ggplot(data=df, aes(x=gdp,y=sp_500))+geom_point()
+with (df, cor.test(sp_500, gdp))
+#Bingo! The GDP is highly correlated to the SP500, although it is a complex relationship.  There is little dispersion in the scatter plot.  It looks similar to the time series itself.  
+#Now let me see if there is a pattern between the various variables and the sp_500 itself.  Let me also color the data with time to better discern the impact of time. 
+
+#Period_index divides 47 years of history by 10 years except for the first 7 years.  So the most recent ten years (Q3/2014 to Q4/2003) is period 1.  Period 5 is from Q3/1973 to Q1/1967. 
+#Code data points with the same color every 10 years.
+#Check the S&P against inflation rate.
+df["period_index"]=c(rep(1,40),rep(2,40),rep(3,40),rep(4,40),rep(5,31))
+ggplot(data=df, aes(x=q_inf_rate, y=sp_500, color=period_index))+
+  geom_point() +
+  scale_y_continuous(trans=log10_trans())
+#That looks interesting.  The negative correlation is visible. 
+#Get a better picture at the inflation less than 1% per quarter.
+#The stock market appears to view a low inflation rate favorably, but the dispersion is large.
+ggplot(data=df, aes(x=q_inf_rate, y=sp_500, color=period_index))+
+  geom_point()+
+  scale_y_continuous(trans=log10_trans())+
+  coord_cartesian(xlim=c(0, .01))
+#One of the characteristics of the last 30 years has been the low inflation rate while the GDP the S&P 500 grew rapidly.
+
+#But inflation rate itself seems to be related to time as the following plot shows. The Fed has been more effective in controlling inflation (and no deflation) in recent history.
+ggplot(data=df, aes(x=Date, y=q_inf_rate))+geom_point()
+#Look at Housing Starts against the S&P
+#Housing Starts seems to be positively coorelated to the sp_500 but in different clusters.  The data are grouped along the time variable.  Note the historically low housing start due to the bubble in the last 6 years. 
+ggplot(data=df, aes(x=housing_start, y=sp_500, color=period_index))+
+  geom_point()
+
+#Now look at unemployment
+#In the last 10 years, unemployment is correlated with the sp500 but there seems to be 2 mechanisms: one before the 1980's and another, after.
+#For the last 20 years, lower unemployment is correlated to higer gdp.  However, over the entire period of 47 years, unemployment looks very cyclical against the GDP and the stock market.  So it apperas that while unemployment seems to affect the stock market within a span of a few years, it doesn't explain S&P growth over the long term.  The S&P doubled in the last 6 years despite high unemployment.
+ggplot(data=df, aes(x=unempl_rate, y=sp_500,color=period_index))+
+         geom_point()
+#The plot below is striking in how cyclical unemployment is. Get the S&P keeps growing.
+ggplot(data=df, aes(x=unempl_rate, y=sp_500,color=period_index))+
+  geom_point()
+#All the 2 variable scatter plots colored with time suggest that there are shorter periods when some of these variables are correlated to each other.  
+#What is unmistakable is the increased value of the SP as the GDP grows over the long arc of 47 years. 
+#So what drives the S&P?  Is it possible that the econometic variables affect quarterly changes in the short-term, but over the lonng term, something else more fundamental is driving stock prices?
+#The one thing that grows nonstop over the last 47 years is population.  A larger population should produce a higher GDP which in turn drives the S&P as shown earlier.  Let me get population data and see how sp_500 changes with the population.
+#US population data is availabe from the Census Bureau as a text document.  I downloaded the text data into 'us_pop.txt' from the Census Bureau.  I needed to sum the data by zip code by state by year.  I used python to do the extraction and wrote the total population by year into 'us_population.csv'.  See 'load_population.py' on data extraction.
+pop = read.csv('us_population1.csv',header=T)
+#Population data is available only yearly from 1969 to 2012.  So I have to wrangle the current dataframe, df, to align with 44 years of population data.  Data is stored in df in reverse chronlogical order.
+pop_end_yr = 1969
+pop_str_yr = 2012
+df_end_yr = 1967
+df_str_yr = 2014
+str_row = (df_str_yr - pop_str_yr) * 4
+end_row = nrow(df) - (pop_end_yr - df_end_yr) * 4
+df_n<-subset(df,select=c(Date,sp_500,gdp))
+df_s<-df_n[str_row:end_row,]
+sp_500=df_s['sp_500']
+n_quarters = (pop_str_yr - pop_end_yr + 1) * 4
+sp_500_yr=sp_500[seq(1,n_quarters,4),]
+gdp_q=df_s['gdp']
+gdp_yr=gdp_q[seq(1,n_quarters,4),]
+pop['sp500']<-rev(sp_500_yr)
+pop['gdp']<-rev(gdp_yr)
+#Now I can scatter plot population against sp_500 and gdp data from df, the running data frame.
+ggplot(data=pop,aes(x=pop,y=gdp))+geom_point()
+ggplot(data=pop, aes(x=pop,y=sp500))+geom_point()
+#gdp bears an almost linear relationship with population growth
+#as we saw earlier, sp500 is highly correlated to the gdp. So one can conjecture that the sp500 is driven by population growth
+#Now that we have a better idea of what drives the S&P, let me return to df.
+#Since the economic variables are clustered by time periods, what if I segregate the data by periods? I may see how the SP500 is impacted by the econometric variables WITHIN the cluster.
+#Since the period_index is rather arbitrary, I would use the changes in party control of the White House as time markers instead.  It might provide some insights into whether the governing philosophy interacts with economic variables.
+#I will mark time periods by the party in the White House.
+df['potus.buckets']<-cut(as.numeric(format(as.yearmon(as.Date(df$Date)),"%Y")),
+                         breaks = c(1966,1969,1977,1981,1993,2001,2009,2015))
+
+#Now visualize the two variables that are colored by governing party periods
+ggplot(data=df, aes(x=q_inf_rate, y=sp_500,color=potus.buckets, type="div"))+
+  geom_point()
+ggplot(data=df, aes(x=housing_start,y=sp_500,color=potus.buckets,type="div"))+
+  geom_point()
+ggplot(data=df, aes(x=unempl_rate, y=sp_500, color = potus.buckets, type="div"))+
+  geom_point()
+
+#These plots confirm that the data is clustered by time periods.  
+#But the variables do not have the same shape of scatter plots across all clusters.  The fact that there are many clusters and shapes explain why cor.test shows little correlation.
+with (df, cor.test(sp_500, q_inf_rate))
+with (df, cor.test(sp_500, housing_start))
+with (df, cor.test(sp_500, unempl_rate))
+```
+### 3 or more variables
+```{r three_variables}
+#Visualizing gdp growth rate, sp 500, quarterly inflation rate and time in one plot. How do I visualize the effect of 1 more variable?  I will use color coded scatter plots as above but also use size of the dot to visualize an additional variable.
+#There seems to be 2 S&P growth mechanisms since the data appears as clusters below and above the red line.  This of course is visible also when the S&P is plotted against time. Inflation is consistently lower above the red line.
+ggplot(data=df, aes(x=gdp_growth_rate, y=sp_500, color=potus.buckets,type='div'))+
+  geom_point(aes(size=q_inf_rate+5))+
+  scale_y_continuous(trans=log10_trans())+
+ geom_hline(yintercept=150, color="red")
+
+#Visualize unemployment rate, sp_500, qarterly inflation rate and time but use facet_wrap instead of color to segregate data by period. Inflation rate doesn't seem to work with unemployment rate in impacting the S&P.
+ggplot(data=df, aes(x=n_unempl_rate,y=sp_500)) +
+  scale_y_continuous(trans=log10_trans()) +
+  geom_point(aes(size=n_q_inf_rate+5))+
+  facet_grid(~potus.buckets)
+#ggpairs to examine patterns across variables under different administrations
+df_sub<-subset(df,select=c(n_sp_500,n_gdp_growth_rate,n_housing_start,
+                           n_unempl_rate,n_q_inf_rate,potus.buckets))
+ggpairs(subset(df_sub, potus.buckets %in% "(2009,2015]"))
+ggpairs(subset(df_sub, potus.buckets %in% "(2001,2009]"))
+ggpairs(subset(df_sub, potus.buckets %in% "(1993,2001]"))
+ggpairs(subset(df_sub, potus.buckets %in% "(1981,1993]"))
+ggpairs(subset(df_sub, potus.buckets %in% "(1977,1981]"))
+ggpairs(subset(df_sub, potus.buckets %in% "(1969,1977]"))
+ggpairs(subset(df_sub, potus.buckets %in% "(1966,1969]"))
+
+#ggpairs confirm earlier observations that the economic data correlates with the SP 500 for short periods of time and for some of the periods.  None has correlation all the time. Unemployment seems to be a "useful" variable in 5 of the 7 periods.  Others come in and out. Also note that in the short-term, the S&P 500 looks random against the GDP growth rate.  
+```
+# Final Plots and Summary
+### SP 500 and Economic Variables
+```{r final_plots}
+#Normalize the population, SP 500 and the GDP in order to plot lines on the same chart.  Melt frame to color code the lines.
+pop[c('n_pop','n_sp500','n_gdp')] <-
+  scale(pop[c('pop','sp500','gdp')],center=T,scale=T)
+
+n_pop <-subset(pop,select=c(year, n_pop,n_sp500,n_gdp))
+
+pop_long <- melt (n_pop,id.vars="year", variable.name="metrics", 
+                  value.name="val")
+
+lp<-ggplot(data=pop_long,aes(x=year, y=val, color=metrics))+
+  geom_line(linetype="solid",size=2.0)
+lp +  scale_colour_discrete(name="Variables",
+                      labels = c('Population', "S&P 500", "GDP"))+
+  ggtitle("S&P 500 and Its Key Drivers") + ylab("Normalized Values") + 
+  xlab("Year")
+
+# The above shows that the S&P is driven by the GDP which in turns is driven by population growth.  As we saw earlier, only the GDP can explain S&P growth over a long period of time.  Other economic variables are correlated with the S&P only over a shorter period of time and only for some of these periods.
+
+#Unemployment appeared in earlier plots to have an impact on the S&P in several periods.  The following plot shows Unemployment against the S&P with Housing Starts coded as circle size, and all clustered by colored periods.
+sp<-ggplot(data=df, aes(x=unempl_rate, y=sp_500, color = potus.buckets,
+                        type="div"))+
+  geom_point(aes(size=n_housing_start+2))+
+  scale_y_continuous(trans=log10_trans())
+sp + scale_colour_discrete(name="Administration",
+                           labels = c('Johnson', 'Nixon/Ford', 'Carter', 
+                                      'Reagan/Bush',
+                                      'Clinton','Bush','Obama')) +
+  scale_size_continuous(name="Normalized Housing Start",
+                      labels = c('1 low','2','3','4', '5 high'))+
+      theme(legend.title = element_text(size=10))+          
+  ggtitle('S&P500 Vs Unemployment &\nHousing Start') +
+  ylab('S&P 500') + xlab('Unemployment Rate')
+
+#The negative corrlelation between unemployment and the S&P 500 is clearly visible in the last 25 years.  Unemployment has an unmistakable effect on the S&P in clusters.  Even as the overall valuation increases over a long period of time, the stock market is negatively impacted by higher unemployment within a cluster.  Housing starts doesn't seem to be a factor.
+
+# I want to show how inflation affects the S&P.  It is a scatter plot of the S&P and the GDP, with the circles size split up by the level of inflation and all color coded by periods.  
+fsp<-ggplot(data=df, aes(x=gdp_growth_rate, y=sp_500, color=potus.buckets,
+                         type='div'))+
+  geom_point(aes(size=n_q_inf_rate+5))+
+  scale_y_continuous(trans=log10_trans())+
+  geom_hline(yintercept=150, color="red") 
+fsp+scale_colour_discrete(name="Administration",
+                           labels = c('Johnson', 'Nixon/Ford', 'Carter', 
+                                      'Reagan/Bush',
+                                      'Clinton','Bush','Obama')) +
+  scale_size_continuous(name="Normalized Quarterly \nInflation Rate",
+                        labels = c('0 low','1 low','2','3', '4', '5 high')) +
+  theme(legend.title = element_text(size=10))+
+  ggtitle('The Effect of Inflation?') +
+  ylab('S&P 500') + xlab("GDP Growth Rate")
+
+#This raises the question of the effect of inflation on the SP500.  What stands out is the meteoric rise of the S&P since the Reagan adminstration.  It grew at a trajectory different from before.  The quarterly gdp growth rate is less scattered post Reagan.  The population growth rate hasn't changed that much throughout these 47 years, yet the S&P grew much faster.  Something seems to have changed at this transition.  What seems to be consistent is the lower inflation during the last 25 years, compared to higher inflation in the earlier 17 year period.   It would interesting to explore this further.  
+```
+# Reflection
+```{r}
+# Do economic factors impact the S&P500?  The NY Stock Exchange thinks so (see NYSE pdf in Reference).  But this analysis shows a more nuanced picture.  Factors that can explain SP500 quarterly changes are elusive. I struggled through the 2 variable analysis and couldn't find any clues.  The only unmistakable trend is the increase in population which drives the gdp.  In turn, that pushes the S&P500 up over time.  The S&P seems to have discernable relationships with economic variables in clusters.  The unmeployment rate, for instance, appears to be useful some of the time, but not always.  Furthermore, a transition seemed to have occurred in the Reagon years when the slope of the S&P curve changed.  Some system-wide changes that were favorable to stock price appreciation appeared to have taken hold.  This transition cannot be explained by population or gdp growth.  Inflation rates were on average higher before the transition. It would be interesting to explore this transition as a follow-on project.

@@ -1,0 +1,103 @@
+---
+title: "get_data"
+author: "Raphael Tam"
+date: "January 7, 2015"
+output: html_document
+---
+Obtain macro-economic data from Quandl.com - a site that provides free, open, validated data.  S&P500 index is the dependent variable.  Combine economic data with categorical variables that indicate whether the Democratic party control the House, Senate or the Presidency for a particular year.
+
+Economic variables are selected based on what I hear from mainstream media  when they report on S&P500 changes.
+
+*gdpusa: USA gross domestic product
+
+*gdpdef: USA infation rate
+
+*houusa: housing starts, USA
+
+*uneusa: employment initial claims, USA
+
+For detailed explanations of the economic data used, please refer to the relevant pages on
+https://www.quandl.com/collections.  From 1967 to 2014, data is available quarterly.
+
+```{r}
+#Build my own data set 
+#setwd('Documents/Udacity/Exploratory_Data_Analysis')
+library(Quandl)
+Quandl.auth("CB886K-Xm-7hp7BTkis2")
+sp500<-Quandl("YAHOO/INDEX_GSPC", start_date="1950-01-03", end_date="2014-12-26",
+              collapse="quarterly")
+gdpusa<-Quandl("FRED/GDPC96", start_date="1950-01-03", end_date="2014-12-26",
+            collapse="quarterly")
+gdpdef<-Quandl("FRED/GDPDEF", start_date="1950-01-03", end_date="2014-12-26",
+               collapse="quarterly")
+houusa<-Quandl("FRED/HOUST", collapse="quarterly")
+uneusa<-Quandl("FRED/LNS14000024", collapse="quarterly")
+
+```
+These are time series.  I want to get the rate of percentage change.
+```{r}
+#calculate rate of change in time series
+getrate <- function (ts){
+  ts1<-c(ts,0)
+  ts2<-c(0,ts)
+  ts1<-ts1[2:(length(ts1)-1)]
+  ts2<-ts2[2:(length(ts2)-1)]
+  (ts2-ts1)/ts1
+  }
+#get gdp and sp500 growth rates with function getrate.  getrate calcuates the rate of change in a time series. 
+gdprat<-getrate(gdpusa[,2])
+sp5_rte<-getrate(sp500[,2])
+
+```
+Display the first couple of data points to show the most current dates.
+```{r}
+head(gdpdef,3)
+head(gdpusa,3)
+head(houusa,3)
+head(sp500,3)
+head(uneusa,3)
+```
+Some time series end in Q4 2014.  Remove the last data point from those series so that all the time series in this analysis start from Q3 2014 and end on Q1 1967 in reverse chronological order. The most current data point is in the first position of the time series.
+```{r}
+sp500c<-sp500[2:192,c(1,7)]
+sp5_rat <- sp5_rte[2:192]
+df<-cbind(sp500c,sp5_rat,gdprat[1:191],gdpusa[1:191,2],gdpdef[1:191,2],houusa[2:192,2],uneusa[2:192,2])
+
+```
+Read in the us_government.csv file to enter political factors.
+us_governmnet.csv data comes from http://www.infoplease.com/ipa/A0774721.html.  The data is entered manually through Excel.  In any given year, if the Democratic party had the majority in the House, the house entry for that year is 1, otherwise 0.  The same coding is used for the Senate and President.
+
+* reverse the time series to line up with df since the dataframe is in reverse chronological order.
+
+* subset only the categorical variables on the control of House, Senate and the White House
+```{r}
+library(utils)
+getwd()
+gv_data<- read.csv('us_government.csv')
+names(gv_data)
+head(gv_data)
+#line up government data such that the Q3, 2014 data point is the first element of 
+#the time series
+gov_data<-gv_data[1:191, c(1, 4,5,6)]
+gov_data<-gov_data[rev(rownames(gov_data)),]
+
+# gdp deflator is used to measure gdp in constant $ by dividing the gdp by the gdp deflator.  It is equivalent to the cumulative inflation rate and the column is renamed as such.  
+#combine all the time series data into a dataframe and renmae the variables
+df<-cbind(df, gov_data[,c(2:4)])
+library(plyr)
+df <- rename(df,c("Adjusted Close"="sp_500",
+                  "sp5_rat"="sp500_qq_change",
+                  "gdprat[1:191]"="gdp_growth_rate",
+                  "gdpusa[1:191, 2]"="gdp",
+                  "gdpdef[1:191, 2]"="cum_inflation",
+                  "houusa[2:192, 2]"="housing_start", 
+                  "uneusa[2:192, 2]"="unempl_rate", 
+                  "House.Control"="house", 
+                  "Senate.Control"="senate",
+                  "President"="president")
+                  )
+head(df)
+tail(df)
+write.csv(df, file="my_data.csv", row.names=FALSE)
+
+```
