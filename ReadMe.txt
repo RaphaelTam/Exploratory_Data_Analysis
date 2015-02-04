@@ -26,10 +26,13 @@ produces us_population.csv.
 manually into a CSV file through Excel.  Values in the categorical variables were
 entered manually by observing which party had the majority.
 
-9. us_pop.txt - downloaded .gz file from 
-http://seer.cancer.gov/popdata.thru.2012/download.html. "us_pop.text" is the unzipped file
-of the downloaded file.   
-See http://seer.cancer.gov/popdata.thru.2012/popdic.html for the data dictionary.
+Note: us_pop.txt is needed for sum_population.py.  However, the file size at 360 MB is
+too large for github.  One can download the .gz file from
+http://seer.cancer.gov/popdata.thru.2012/download.html. Unzip, name it "us_pop.text" 
+and save it in the working directory before running sum_population.py.
+   
+See http://seer.cancer.gov/popdata.thru.2012/popdic.html for the data dictionary of 
+us_pop.txt
 
 References:
 http://www1.nyse.com/pdfs/nyse_chap_04.pdf
