@@ -28,7 +28,7 @@ entered manually by observing which party had the majority.
 
 Note: us_pop.txt is needed to run sum_population.py.  However, the file size at 360 MB is
 too large for github.  One can download the .gz file from
-http://seer.cancer.gov/popdata.thru.2012/download.html. Unzip, name it "us_pop.text" 
+http://seer.cancer.gov/popdata.thru.2012/download.html. Unzip, name it "us_pop.txt" 
 and save it in the working directory before running sum_population.py.
    
 See http://seer.cancer.gov/popdata.thru.2012/popdic.html for the data dictionary of 
