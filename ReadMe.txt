@@ -9,7 +9,7 @@ my_data.csv and us_population.csv
 3. my_data.csv - US economic data from 1967 to 2014. It is data input to EDA.Rmd and the
 output from get_data.Rmd.
 
-4. us_population.csv - total US population by year.  It is data input to EDA.Rmd and 
+4. us_population1.csv - total US population by year.  It is data input to EDA.Rmd and 
 output from sum_population.py.  Data in this file is checked for accuracy against 
 US Census Bureau data online.
 
@@ -26,7 +26,7 @@ produces us_population.csv.
 manually into a CSV file through Excel.  Values in the categorical variables were
 entered manually by observing which party had the majority.
 
-Note: us_pop.txt is needed for sum_population.py.  However, the file size at 360 MB is
+Note: us_pop.txt is needed to run sum_population.py.  However, the file size at 360 MB is
 too large for github.  One can download the .gz file from
 http://seer.cancer.gov/popdata.thru.2012/download.html. Unzip, name it "us_pop.text" 
 and save it in the working directory before running sum_population.py.
